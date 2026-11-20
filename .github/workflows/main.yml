@@ -1,0 +1,60 @@
+name: Windows Cloud PC - AnyDesk (Self-Contained)
+
+on:
+  workflow_dispatch:
+    inputs:
+      anydesk_password:
+        description: 'Senha para conectar no AnyDesk'
+        required: true
+        default: 'MudarSenha@2026'
+
+jobs:
+  build:
+    name: Start Windows Environment
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Download & Install AnyDesk
+        shell: pwsh
+        run: |
+          Write-Host "Baixando AnyDesk oficial..."
+          Invoke-WebRequest -Uri "https://anydesk.com" -OutFile "AnyDesk.exe"
+          
+          Write-Host "Instalando AnyDesk silenciosamente..."
+          Start-Process -FilePath ".\AnyDesk.exe" -ArgumentList "--install `"C:\Program Files (x86)\AnyDesk`" --start-with-win --silent" -Wait
+          Start-Sleep -Seconds 5
+
+      - name: Configure Password & Get AnyDesk ID
+        shell: pwsh
+        run: |
+          $anydeskPath = "C:\Program Files (x86)\AnyDesk\AnyDesk.exe"
+          
+          # Define a senha de acesso não supervisionado
+          cmd /c "echo ${{ github.event.inputs.anydesk_password }} | `"$anydeskPath`" --set-password"
+          Start-Sleep -Seconds 3
+
+          # Obtém e exibe o ID do AnyDesk nos logs
+          $id = cmd /c "`"$anydeskPath`" --get-id"
+          Write-Host "========================================"
+          Write-Host "ANYDESK ID: $id"
+          Write-Host "SENHA: ${{ github.event.inputs.anydesk_password }}"
+          Write-Host "========================================"
+
+      - name: Keep Alive & Monitor AnyDesk
+        shell: pwsh
+        run: |
+          $anydeskPath = "C:\Program Files (x86)\AnyDesk\AnyDesk.exe"
+          $endTime = (Get-Date).AddMinutes(350)
+          
+          while ((Get-Date) -lt $endTime) {
+            $process = Get-Process -Name "AnyDesk" -ErrorAction SilentlyContinue
+            if (-not $process) {
+              Write-Host "AnyDesk fechado. Reiniciando..."
+              Start-Process -FilePath $anydeskPath
+            } else {
+              Write-Host "AnyDesk ativo. Próxima verificação em 5 minutos."
+            }
+            Start-Sleep -Seconds 300
+          }
+
